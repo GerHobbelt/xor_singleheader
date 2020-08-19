@@ -1,6 +1,7 @@
 #include "fusefilter.h"
 #include "xorfilter.h"
 #include <assert.h>
+#include <inttypes.h>
 
 
 bool testxor8() {
@@ -241,7 +242,7 @@ bool testbufferedxor32() {
 bool testbufferedxor32big() {
   printf("testing buffered xor32 (big - this will take a long time)\n");
 
-  size_t size = 60000000;
+  size_t size = 100000000;
   XorFilter<uint32_t> filter(size);
   if (!filter.valid()) {
     printf("failed to allocate filter\n");
@@ -260,7 +261,7 @@ bool testbufferedxor32big() {
       return false;
     }
   }
-  printf("filter size in bytes: %llu bytes\n", filter.sizeInBytes());
+  printf("filter size in bytes: %"PRId64" bytes\n", filter.sizeInBytes());
 
   uint64_t random_matches = 0;
   uint64_t trials = 100;
@@ -270,7 +271,7 @@ bool testbufferedxor32big() {
     }
   }
 
-  printf("fpp %3.15f (estimated - %llu false positives out of %llu entries) \n",
+  printf("fpp %3.15f (estimated - %"PRId64" false positives out of %"PRId64" entries) \n",
          random_matches * 1.0 / (trials * size), random_matches, trials * size);
   printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
   free(big_set);
