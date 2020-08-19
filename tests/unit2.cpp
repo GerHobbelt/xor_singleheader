@@ -261,7 +261,7 @@ bool testbufferedxor32big() {
       return false;
     }
   }
-  printf("filter size in bytes: %"PRId64" bytes\n", filter.sizeInBytes());
+  printf("filter size in bytes: %" PRId64 " bytes\n", filter.sizeInBytes());
 
   uint64_t random_matches = 0;
   uint64_t trials = 100;
@@ -271,7 +271,7 @@ bool testbufferedxor32big() {
     }
   }
 
-  printf("fpp %3.15f (estimated - %"PRId64" false positives out of %"PRId64" entries) \n",
+  printf("fpp %3.15f (estimated - %" PRId64 " false positives out of %" PRId64 " entries) \n",
          random_matches * 1.0 / (trials * size), random_matches, trials * size);
   printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
   free(big_set);
