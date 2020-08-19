@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <inttypes.h>
 
+using namespace xorfilter;
 
 bool testPopulate(BaseXorFilter &filter, uint64_t *big_set, uint64_t size) {
   // Populate the filter

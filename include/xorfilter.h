@@ -1265,6 +1265,8 @@ bool xor16_populate(const uint64_t *keys, uint32_t size, xor16_t *filter) {
 
 #ifdef __cplusplus
 
+namespace xorfilter {
+
 class BaseXorFilter {
   public:
     BaseXorFilter() {}
@@ -1838,6 +1840,8 @@ private:
 
 
 };
+
+} // namespace xorfilter
 
 #endif // __cplusplus
 
