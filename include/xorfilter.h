@@ -1265,18 +1265,50 @@ bool xor16_populate(const uint64_t *keys, uint32_t size, xor16_t *filter) {
 
 #ifdef __cplusplus
 
-template <typename ItemType>
-class XorFilter {
+class BaseXorFilter {
+  public:
+    BaseXorFilter() {}
+    virtual ~BaseXorFilter() {}
 
-  uint64_t m_keyCount = 0;
-  uint64_t m_seed = 0;
-  uint64_t m_blockLength = 0;
+    virtual bool valid() const = 0;
+
+    inline uint64_t keyCount() const {
+      return m_keyCount;
+    }
+
+    inline uint64_t blockLength() const {
+      return m_blockLength;
+    }
+
+    inline uint64_t seed() const {
+      return m_seed;
+    }
+
+    virtual inline void *data() const = 0;
+
+    virtual uint64_t sizeInBytes() const = 0;
+
+    virtual bool contain(uint64_t key) const = 0;
+
+    virtual bool populateBuffered(const uint64_t *keys, uint32_t size) = 0;
+
+    virtual bool populate(const uint64_t *keys, uint32_t size) = 0;
+
+  protected:
+    uint64_t m_keyCount = 0;
+    uint64_t m_seed = 0;
+    uint64_t m_blockLength = 0;
+    bool m_ownData = false;
+};
+
+template <typename ItemType>
+class XorFilter : public BaseXorFilter {
+
   ItemType *m_fingerprints = NULL;
-  bool m_ownData = false;
 
 public:
   // Constructor to create a new filter
-  XorFilter(uint64_t keyCount) : m_keyCount(keyCount) {
+  XorFilter(uint64_t keyCount) {
     uint64_t capacity = 32 + 1.23 * keyCount;
     capacity = capacity / 3 * 3;
     m_blockLength = capacity / 3;
@@ -1286,6 +1318,7 @@ public:
       return;
     }
     m_ownData = true;
+    m_keyCount = keyCount;
   }
 
   // Constructor to load an existing filter
@@ -1336,7 +1369,7 @@ public:
   }
 
   // Report if the key is in the set, with false positive rate.
-  inline bool contain(uint64_t key) {
+  inline bool contain(uint64_t key) const {
     uint64_t hash = xor_mix_split(key, m_seed);
     ItemType f = xor_fingerprint(hash);
     uint32_t r0 = (uint32_t)hash;

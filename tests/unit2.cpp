@@ -4,118 +4,174 @@
 #include <inttypes.h>
 
 
-bool testxor8() {
-  printf("testing xor8\n");
+bool testPopulate(BaseXorFilter &filter, uint64_t *big_set, uint64_t size) {
+  // Populate the filter
+  if (!filter.populate(big_set, size)) {
+    printf("populate failed\n");
+    return false;
+  }
 
-  size_t size = 10000;
+  // Test for true positives
+  for (uint64_t i = 0; i < size; i++) {
+    if (!filter.contain(big_set[i])) {
+      printf("expected value not found\n");
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool testPopulateBuffered(BaseXorFilter &filter, uint64_t *big_set, uint64_t size) {
+  // Populate the filter
+  if (!filter.populateBuffered(big_set, size)) {
+    printf("populate failed\n");
+    return false;
+  }
+
+  // Test for true positives
+  for (uint64_t i = 0; i < size; i++) {
+    if (!filter.contain(big_set[i])) {
+      printf("expected value not found\n");
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool testContain(BaseXorFilter &filter, uint64_t size, size_t multiplier, uint64_t &falsePositives, double &falsePositiveProbability) {
+  falsePositives = 0;
+  falsePositiveProbability = 0.0;
+  uint64_t trials = multiplier * size;
+  for (uint64_t i = size; i < trials + size; i++) {
+    if (filter.contain(i)) {
+      falsePositives++;
+    }
+  }
+  falsePositiveProbability = falsePositives * 1.0 / trials;
+  printf("%" PRId64 " false positives in %" PRId64 " trials, fpp %3.10f (estimated) \n",
+         falsePositives, trials, falsePositives * 1.0 / trials);
+  return true;
+}
+
+uint64_t *createBigSet(uint64_t size) {
+  // allocate the set
+  uint64_t *big_set = (uint64_t *)malloc(sizeof(uint64_t) * size);
+  if (!big_set) {
+    return NULL;
+  }
+
+  // Fill in the set
+  for (uint64_t i = 0; i < size; i++) {
+    big_set[i] = i; // we use contiguous values
+  }
+
+  return big_set;
+}
+
+bool testxor8() {
+  printf("\ntesting xor8\n");
+
+  uint64_t size = 10000;
+
+  // we need some set of values
+  uint64_t *big_set = createBigSet(size);
+  if (!big_set) {
+    printf("failed to create big set\n");
+    return false;
+  }
+
+  // create the filter
   XorFilter<uint8_t> filter(size);
   if (!filter.valid()) {
     printf("failed to allocate filter\n");
     return false;
   }
-  // we need some set of values
-  uint64_t *big_set = (uint64_t *)malloc(sizeof(uint64_t) * size);
-  for (size_t i = 0; i < size; i++) {
-    big_set[i] = i; // we use contiguous values
-  }
-  // we construct the filter
-  filter.populate(big_set, size);
-  for (size_t i = 0; i < size; i++) {
-    if (!filter.contain(big_set[i])) {
-      printf("bug!\n");
-      return false;
-    }
+
+  // test populate
+  if (!testPopulate(filter, big_set, size)) {
+    return false;
   }
 
-  size_t random_matches = 0;
-  size_t trials = 10000000; //(uint64_t)rand() << 32 + rand()
-  for (size_t i = 0; i < trials; i++) {
-    uint64_t random_key = ((uint64_t)rand() << 32) + rand();
-    if (filter.contain(random_key)) {
-      if (random_key >= size) {
-        random_matches++;
-      }
-    }
+  // test contain
+  uint64_t falsePositives;
+  double falsePositiveProbability;
+  if (!testContain(filter, size, 1000, falsePositives, falsePositiveProbability)) {
+    return false;
   }
-  printf("fpp %3.10f (estimated) \n", random_matches * 1.0 / trials);
+
   printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
   free(big_set);
   return true;
 }
 
 bool testbufferedxor8() {
-  printf("testing buffered xor8\n");
+  printf("\ntesting buffered xor8\n");
 
-  size_t size = 10000;
+  uint64_t size = 10000;
+
+  // we need some set of values
+  uint64_t *big_set = createBigSet(size);
+  if (!big_set) {
+    printf("failed to create big set\n");
+    return false;
+  }
+
   XorFilter<uint8_t> filter(size);
   if (!filter.valid()) {
     printf("failed to allocate filter\n");
     return false;
   }
-  // we need some set of values
-  uint64_t *big_set = (uint64_t *)malloc(sizeof(uint64_t) * size);
-  for (size_t i = 0; i < size; i++) {
-    big_set[i] = i; // we use contiguous values
-  }
-  // we construct the filter
-  filter.populateBuffered(big_set, size);
-  for (size_t i = 0; i < size; i++) {
-    if (!filter.contain(big_set[i])) {
-      printf("bug!\n");
-      return false;
-    }
+
+  // test populate buffered
+  if (!testPopulateBuffered(filter, big_set, size)) {
+    return false;
   }
 
-  size_t random_matches = 0;
-  size_t trials = 10000000; //(uint64_t)rand() << 32 + rand()
-  for (size_t i = 0; i < trials; i++) {
-    uint64_t random_key = ((uint64_t)rand() << 32) + rand();
-    if (filter.contain(random_key)) {
-      if (random_key >= size) {
-        random_matches++;
-      }
-    }
+  // test contain
+  uint64_t falsePositives;
+  double falsePositiveProbability;
+  if (!testContain(filter, size, 1000, falsePositives, falsePositiveProbability)) {
+    return false;
   }
-  printf("fpp %3.10f (estimated) \n", random_matches * 1.0 / trials);
+
   printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
   free(big_set);
   return true;
 }
 
 bool testxor16() {
-  printf("testing xor16\n");
+  printf("\ntesting xor16\n");
 
-  size_t size = 10000;
+  uint64_t size = 10000;
+
+  // we need some set of values
+  uint64_t *big_set = createBigSet(size);
+  if (!big_set) {
+    printf("failed to create big set\n");
+    return false;
+  }
+
+  // create the filter
   XorFilter<uint16_t> filter(size);
   if (!filter.valid()) {
     printf("failed to allocate filter\n");
     return false;
   }
-  // we need some set of values
-  uint64_t *big_set = (uint64_t *)malloc(sizeof(uint64_t) * size);
-  for (size_t i = 0; i < size; i++) {
-    big_set[i] = i; // we use contiguous values
-  }
-  // we construct the filter
-  filter.populate(big_set, size);
-  for (size_t i = 0; i < size; i++) {
-    if (!filter.contain(big_set[i])) {
-      printf("bug!\n");
-      return false;
-    }
+
+  // test populate
+  if (!testPopulate(filter, big_set, size)) {
+    return false;
   }
 
-  size_t random_matches = 0;
-  size_t trials = 10000000; //(uint64_t)rand() << 32 + rand()
-  for (size_t i = 0; i < trials; i++) {
-    uint64_t random_key = ((uint64_t)rand() << 32) + rand();
-    if (filter.contain(random_key)) {
-      if (random_key >= size) {
-        random_matches++;
-      }
-    }
+  // test contain
+  uint64_t falsePositives;
+  double falsePositiveProbability;
+  if (!testContain(filter, size, 1000, falsePositives, falsePositiveProbability)) {
+    return false;
   }
-  printf("fpp %3.10f (estimated) \n", random_matches * 1.0 / trials);
+
   printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
   free(big_set);
   return true;
@@ -123,255 +179,242 @@ bool testxor16() {
 
 
 bool testbufferedxor16() {
-  printf("testing buffered xor16\n");
+  printf("\ntesting buffered xor16\n");
 
-  size_t size = 10000;
+  uint64_t size = 10000;
+
+  // we need some set of values
+  uint64_t *big_set = createBigSet(size);
+  if (!big_set) {
+    printf("failed to create big set\n");
+    return false;
+  }
+
+  // create the filter
   XorFilter<uint16_t> filter(size);
   if (!filter.valid()) {
     printf("failed to allocate filter\n");
     return false;
   }
-  // we need some set of values
-  uint64_t *big_set = (uint64_t *)malloc(sizeof(uint64_t) * size);
-  for (size_t i = 0; i < size; i++) {
-    big_set[i] = i; // we use contiguous values
-  }
-  // we construct the filter
-  filter.populateBuffered(big_set, size);
-  for (size_t i = 0; i < size; i++) {
-    if (!filter.contain(big_set[i])) {
-      printf("bug!\n");
-      return false;
-    }
+
+  // test populate
+  if (!testPopulateBuffered(filter, big_set, size)) {
+    return false;
   }
 
-  size_t random_matches = 0;
-  size_t trials = 10000000; //(uint64_t)rand() << 32 + rand()
-  for (size_t i = 0; i < trials; i++) {
-    uint64_t random_key = ((uint64_t)rand() << 32) + rand();
-    if (filter.contain(random_key)) {
-      if (random_key >= size) {
-        random_matches++;
-      }
-    }
+  // test contain
+  uint64_t falsePositives;
+  double falsePositiveProbability;
+  if (!testContain(filter, size, 1000, falsePositives, falsePositiveProbability)) {
+    return false;
   }
-  printf("fpp %3.10f (estimated) \n", random_matches * 1.0 / trials);
+
   printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
   free(big_set);
   return true;
 }
 
 bool testxor32() {
-  printf("testing xor32\n");
+  printf("\ntesting xor32\n");
 
-  size_t size = 10000;
+  uint64_t size = 10000;
+
+  // we need some set of values
+  uint64_t *big_set = createBigSet(size);
+  if (!big_set) {
+    printf("failed to create big set\n");
+    return false;
+  }
+
+  // create the filter
   XorFilter<uint32_t> filter(size);
   if (!filter.valid()) {
     printf("failed to allocate filter\n");
     return false;
   }
-  // we need some set of values
-  uint64_t *big_set = (uint64_t *)malloc(sizeof(uint64_t) * size);
-  for (size_t i = 0; i < size; i++) {
-    big_set[i] = i; // we use contiguous values
-  }
-  // we construct the filter
-  filter.populate(big_set, size);
-  for (size_t i = 0; i < size; i++) {
-    if (!filter.contain(big_set[i])) {
-      printf("bug!\n");
-      return false;
-    }
+
+  // test populate
+  if (!testPopulate(filter, big_set, size)) {
+    return false;
   }
 
-  size_t random_matches = 0;
-  size_t trials = 10000000; //(uint64_t)rand() << 32 + rand()
-  for (size_t i = 0; i < trials; i++) {
-    uint64_t random_key = ((uint64_t)rand() << 32) + rand();
-    if (filter.contain(random_key)) {
-      if (random_key >= size) {
-        random_matches++;
-      }
-    }
+  // test contain
+  uint64_t falsePositives;
+  double falsePositiveProbability;
+  if (!testContain(filter, size, 1000, falsePositives, falsePositiveProbability)) {
+    return false;
   }
-  printf("fpp %3.15f (estimated) \n", random_matches * 1.0 / trials);
+
   printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
   free(big_set);
   return true;
 }
 
 bool testbufferedxor32() {
-  printf("testing buffered xor32\n");
+  printf("\ntesting buffered xor32\n");
 
-  size_t size = 10000;
+  uint64_t size = 10000;
+
+  // we need some set of values
+  uint64_t *big_set = createBigSet(size);
+  if (!big_set) {
+    printf("failed to create big set\n");
+    return false;
+  }
+
+  // create the filter
   XorFilter<uint32_t> filter(size);
   if (!filter.valid()) {
     printf("failed to allocate filter\n");
     return false;
   }
-  // we need some set of values
-  uint64_t *big_set = (uint64_t *)malloc(sizeof(uint64_t) * size);
-  for (size_t i = 0; i < size; i++) {
-    big_set[i] = i; // we use contiguous values
-  }
-  // we construct the filter
-  filter.populateBuffered(big_set, size);
-  for (size_t i = 0; i < size; i++) {
-    if (!filter.contain(big_set[i])) {
-      printf("bug!\n");
-      return false;
-    }
+
+  // test populate
+  if (!testPopulateBuffered(filter, big_set, size)) {
+    return false;
   }
 
-  size_t random_matches = 0;
-  size_t trials = 10000000; //(uint64_t)rand() << 32 + rand()
-  for (size_t i = 0; i < trials; i++) {
-    uint64_t random_key = ((uint64_t)rand() << 32) + rand();
-    if (filter.contain(random_key)) {
-      if (random_key >= size) {
-        random_matches++;
-      }
-    }
+  // test contain
+  uint64_t falsePositives;
+  double falsePositiveProbability;
+  if (!testContain(filter, size, 1000, falsePositives, falsePositiveProbability)) {
+    return false;
   }
-  printf("fpp %3.15f (estimated) \n", random_matches * 1.0 / trials);
+
   printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
   free(big_set);
   return true;
 }
 
 bool testbufferedxor32big() {
-  printf("testing buffered xor32 (big - this will take a long time)\n");
+  printf("\ntesting buffered xor32 (big - this will take a long time)\n");
 
-  size_t size = 100000000;
+  uint64_t size = 100000000;
+
+  // we need some set of values
+  uint64_t *big_set = createBigSet(size);
+  if (!big_set) {
+    printf("failed to create big set\n");
+    return false;
+  }
+
+  // create the filter
   XorFilter<uint32_t> filter(size);
   if (!filter.valid()) {
     printf("failed to allocate filter\n");
     return false;
   }
-  // we need some set of values
-  uint64_t *big_set = (uint64_t *)malloc(sizeof(uint64_t) * size);
-  for (size_t i = 0; i < size; i++) {
-    big_set[i] = i; // we use contiguous values
-  }
-  // we construct the filter
-  filter.populateBuffered(big_set, size);
-  for (size_t i = 0; i < size; i++) {
-    if (!filter.contain(big_set[i])) {
-      printf("bug!\n");
-      return false;
-    }
-  }
-  printf("filter size in bytes: %" PRId64 " bytes\n", filter.sizeInBytes());
 
-  uint64_t random_matches = 0;
-  uint64_t trials = 100;
-  for (uint64_t i = size; i < (trials + 1) * size; i++) {
-    if (filter.contain(i)) {
-      random_matches++;
-    }
+  // test populate
+  if (!testPopulateBuffered(filter, big_set, size)) {
+    return false;
   }
 
-  printf("fpp %3.15f (estimated - %" PRId64 " false positives out of %" PRId64 " entries) \n",
-         random_matches * 1.0 / (trials * size), random_matches, trials * size);
+  // test contain
+  uint64_t falsePositives;
+  double falsePositiveProbability;
+  if (!testContain(filter, size, 100, falsePositives, falsePositiveProbability)) {
+    return false;
+  }
+
   printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
   free(big_set);
   return true;
 }
 
 bool testLoadWithData() {
-  printf("testing load with data\n");
+  printf("\ntesting load with data\n");
+
+  uint64_t size = 10000;
 
   // we need some set of values
-  size_t size = 10000;
-  uint64_t *big_set = (uint64_t *)malloc(sizeof(uint64_t) * size);
-  for (size_t i = 0; i < size; i++) {
-    big_set[i] = i; // we use contiguous values
+  uint64_t *big_set = createBigSet(size);
+  if (!big_set) {
+    printf("failed to create big set\n");
+    return false;
   }
 
-  // construct and populate the filter
+
+  // construct and populate the 8-bit filter
   XorFilter<uint8_t> filter8_1(size);
   if (!filter8_1.valid()) {
     printf("failed to allocate filter\n");
     return false;
   }
-  filter8_1.populate(big_set, size);
-  // true positive tests
-  for (size_t i = 0; i < size; i++) {
-    if (!filter8_1.contain(big_set[i])) {
-      printf("bug!\n");
-      return false;
-    }
+  // test populate
+  if (!testPopulate(filter8_1, big_set, size)) {
+    return false;
+  }
+  // test contain
+  uint64_t falsePositives;
+  double falsePositiveProbability;
+  if (!testContain(filter8_1, size, 1000, falsePositives, falsePositiveProbability)) {
+    return false;
   }
 
+  // load the filter data into a new filter
   XorFilter<uint8_t> filter8_2(filter8_1.data(), filter8_1.sizeInBytes(), filter8_1.keyCount(), filter8_1.blockLength(), filter8_1.seed());
   if (!filter8_2.valid()) {
     printf("failed to load filter\n");
     return false;
   }
-  // true positive tests
-  for (size_t i = 0; i < size; i++) {
-    if (!filter8_2.contain(big_set[i])) {
-      printf("bug!\n");
-      return false;
-    }
+  // test contain
+  if (!testContain(filter8_2, size, 1000, falsePositives, falsePositiveProbability)) {
+    return false;
   }
 
 
-  // construct and populate the filter
+  // construct and populate the 16-bit filter
   XorFilter<uint16_t> filter16_1(size);
   if (!filter16_1.valid()) {
     printf("failed to allocate filter\n");
     return false;
   }
-  filter16_1.populate(big_set, size);
-  // true positive tests
-  for (size_t i = 0; i < size; i++) {
-    if (!filter16_1.contain(big_set[i])) {
-      printf("bug!\n");
-      return false;
-    }
+  // test populate
+  if (!testPopulate(filter16_1, big_set, size)) {
+    return false;
   }
+  // test contain
+  if (!testContain(filter16_1, size, 1000, falsePositives, falsePositiveProbability)) {
+    return false;
+  }
+
   // load the filter data into a new filter
   XorFilter<uint16_t> filter16_2(filter16_1.data(), filter16_1.sizeInBytes(), filter16_1.keyCount(), filter16_1.blockLength(), filter16_1.seed());
   if (!filter16_2.valid()) {
     printf("failed to load filter\n");
     return false;
   }
-  // true positive tests
-  for (size_t i = 0; i < size; i++) {
-    if (!filter16_2.contain(big_set[i])) {
-      printf("bug!\n");
-      return false;
-    }
+  // test contain
+  if (!testContain(filter16_2, size, 1000, falsePositives, falsePositiveProbability)) {
+    return false;
   }
 
 
-  // construct and populate the filter
+  // construct and populate the 32-bit filter
   XorFilter<uint32_t> filter32_1(size);
   if (!filter32_1.valid()) {
     printf("failed to allocate filter\n");
     return false;
   }
-  filter32_1.populate(big_set, size);
-  // true positive tests
-  for (size_t i = 0; i < size; i++) {
-    if (!filter32_1.contain(big_set[i])) {
-      printf("bug!\n");
-      return false;
-    }
+  // test populate
+  if (!testPopulate(filter32_1, big_set, size)) {
+    return false;
   }
+  // test contain
+  if (!testContain(filter32_1, size, 1000, falsePositives, falsePositiveProbability)) {
+    return false;
+  }
+
   // load the filter data into a new filter
   XorFilter<uint32_t> filter32_2(filter32_1.data(), filter32_1.sizeInBytes(), filter32_1.keyCount(), filter32_1.blockLength(), filter32_1.seed());
   if (!filter32_2.valid()) {
     printf("failed to load filter\n");
     return false;
   }
-  // true positive tests
-  for (size_t i = 0; i < size; i++) {
-    if (!filter32_2.contain(big_set[i])) {
-      printf("bug!\n");
-      return false;
-    }
+  // test contain
+  if (!testContain(filter32_2, size, 1000, falsePositives, falsePositiveProbability)) {
+    return false;
   }
 
 
@@ -380,7 +423,7 @@ bool testLoadWithData() {
 }
 
 bool testfuse8() {
-  printf("testing fuse8\n");
+  printf("\ntesting fuse8\n");
 
   fuse8_t filter;
   size_t size = 1000000;
