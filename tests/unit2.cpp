@@ -354,7 +354,9 @@ bool testLoadWithData() {
   }
 
   // load the filter data into a new filter
-  XorFilter<uint8_t> filter8_2(filter8_1.data(), filter8_1.sizeInBytes(), filter8_1.keyCount(), filter8_1.blockLength(), filter8_1.seed());
+  XorFilter<uint8_t> filter8_2(filter8_1.data(), filter8_1.sizeInBytes(),
+                               filter8_1.bitsPerKey(), filter8_1.keyCount(),
+                               filter8_1.blockLength(), filter8_1.seed());
   if (!filter8_2.valid()) {
     printf("failed to load filter\n");
     return false;
@@ -381,7 +383,9 @@ bool testLoadWithData() {
   }
 
   // load the filter data into a new filter
-  XorFilter<uint16_t> filter16_2(filter16_1.data(), filter16_1.sizeInBytes(), filter16_1.keyCount(), filter16_1.blockLength(), filter16_1.seed());
+  XorFilter<uint16_t> filter16_2(filter16_1.data(), filter16_1.sizeInBytes(),
+                                 filter16_1.bitsPerKey(), filter16_1.keyCount(),
+                                 filter16_1.blockLength(), filter16_1.seed());
   if (!filter16_2.valid()) {
     printf("failed to load filter\n");
     return false;
@@ -408,7 +412,9 @@ bool testLoadWithData() {
   }
 
   // load the filter data into a new filter
-  XorFilter<uint32_t> filter32_2(filter32_1.data(), filter32_1.sizeInBytes(), filter32_1.keyCount(), filter32_1.blockLength(), filter32_1.seed());
+  XorFilter<uint32_t> filter32_2(filter32_1.data(), filter32_1.sizeInBytes(),
+                                 filter32_1.bitsPerKey(), filter32_1.keyCount(),
+                                 filter32_1.blockLength(), filter32_1.seed());
   if (!filter32_2.valid()) {
     printf("failed to load filter\n");
     return false;

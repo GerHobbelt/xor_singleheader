@@ -1286,6 +1286,8 @@ class BaseXorFilter {
       return m_seed;
     }
 
+    virtual inline uint32_t bitsPerKey() const = 0;
+
     virtual inline void *data() const = 0;
 
     virtual uint64_t sizeInBytes() const = 0;
@@ -1297,6 +1299,7 @@ class BaseXorFilter {
     virtual bool populate(const uint64_t *keys, uint32_t size) = 0;
 
   protected:
+    uint32_t m_bitsPerKey = 0;
     uint64_t m_keyCount = 0;
     uint64_t m_seed = 0;
     uint64_t m_blockLength = 0;
@@ -1321,10 +1324,11 @@ public:
     }
     m_ownData = true;
     m_keyCount = keyCount;
+    m_bitsPerKey = sizeof(ItemType) * 8;
   }
 
   // Constructor to load an existing filter
-  XorFilter(void *data, uint64_t len, uint64_t keyCount, uint64_t blockLength, uint64_t seed) {
+  XorFilter(void *data, uint64_t len, uint32_t bitsPerKey, uint64_t keyCount, uint64_t blockLength, uint64_t seed) {
     uint64_t capacity = blockLength * 3;
     if (len != capacity * sizeof(ItemType)) {
       return;
@@ -1333,6 +1337,7 @@ public:
     if (m_fingerprints == NULL) {
       return;
     }
+    m_bitsPerKey = bitsPerKey;
     m_keyCount = keyCount;
     m_blockLength = blockLength;
     m_seed = seed;
@@ -1359,6 +1364,10 @@ public:
 
   inline uint64_t seed() const {
     return m_seed;
+  }
+
+  inline uint32_t bitsPerKey() const {
+    return m_bitsPerKey;
   }
 
   inline void *data() const {
