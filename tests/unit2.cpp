@@ -37,7 +37,7 @@ bool testxor8() {
     }
   }
   printf("fpp %3.10f (estimated) \n", random_matches * 1.0 / trials);
-  printf("bits per entry %3.1f\n", filter.size_in_bytes() * 8.0 / size);
+  printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
   free(big_set);
   return true;
 }
@@ -57,7 +57,7 @@ bool testbufferedxor8() {
     big_set[i] = i; // we use contiguous values
   }
   // we construct the filter
-  filter.buffered_populate(big_set, size);
+  filter.populateBuffered(big_set, size);
   for (size_t i = 0; i < size; i++) {
     if (!filter.contain(big_set[i])) {
       printf("bug!\n");
@@ -76,7 +76,7 @@ bool testbufferedxor8() {
     }
   }
   printf("fpp %3.10f (estimated) \n", random_matches * 1.0 / trials);
-  printf("bits per entry %3.1f\n", filter.size_in_bytes() * 8.0 / size);
+  printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
   free(big_set);
   return true;
 }
@@ -115,7 +115,7 @@ bool testxor16() {
     }
   }
   printf("fpp %3.10f (estimated) \n", random_matches * 1.0 / trials);
-  printf("bits per entry %3.1f\n", filter.size_in_bytes() * 8.0 / size);
+  printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
   free(big_set);
   return true;
 }
@@ -136,7 +136,7 @@ bool testbufferedxor16() {
     big_set[i] = i; // we use contiguous values
   }
   // we construct the filter
-  filter.buffered_populate(big_set, size);
+  filter.populateBuffered(big_set, size);
   for (size_t i = 0; i < size; i++) {
     if (!filter.contain(big_set[i])) {
       printf("bug!\n");
@@ -155,7 +155,7 @@ bool testbufferedxor16() {
     }
   }
   printf("fpp %3.10f (estimated) \n", random_matches * 1.0 / trials);
-  printf("bits per entry %3.1f\n", filter.size_in_bytes() * 8.0 / size);
+  printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
   free(big_set);
   return true;
 }
@@ -194,7 +194,7 @@ bool testxor32() {
     }
   }
   printf("fpp %3.15f (estimated) \n", random_matches * 1.0 / trials);
-  printf("bits per entry %3.1f\n", filter.size_in_bytes() * 8.0 / size);
+  printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
   free(big_set);
   return true;
 }
@@ -214,7 +214,7 @@ bool testbufferedxor32() {
     big_set[i] = i; // we use contiguous values
   }
   // we construct the filter
-  filter.buffered_populate(big_set, size);
+  filter.populateBuffered(big_set, size);
   for (size_t i = 0; i < size; i++) {
     if (!filter.contain(big_set[i])) {
       printf("bug!\n");
@@ -233,7 +233,7 @@ bool testbufferedxor32() {
     }
   }
   printf("fpp %3.15f (estimated) \n", random_matches * 1.0 / trials);
-  printf("bits per entry %3.1f\n", filter.size_in_bytes() * 8.0 / size);
+  printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
   free(big_set);
   return true;
 }
@@ -253,14 +253,14 @@ bool testbufferedxor32big() {
     big_set[i] = i; // we use contiguous values
   }
   // we construct the filter
-  filter.buffered_populate(big_set, size);
+  filter.populateBuffered(big_set, size);
   for (size_t i = 0; i < size; i++) {
     if (!filter.contain(big_set[i])) {
       printf("bug!\n");
       return false;
     }
   }
-  printf("filter size in bytes: %llu bytes\n", filter.size_in_bytes());
+  printf("filter size in bytes: %llu bytes\n", filter.sizeInBytes());
 
   uint64_t random_matches = 0;
   uint64_t trials = 100;
@@ -272,8 +272,109 @@ bool testbufferedxor32big() {
 
   printf("fpp %3.15f (estimated - %llu false positives out of %llu entries) \n",
          random_matches * 1.0 / (trials * size), random_matches, trials * size);
-  printf("bits per entry %3.1f\n", filter.size_in_bytes() * 8.0 / size);
+  printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
   free(big_set);
+  return true;
+}
+
+bool testLoadWithData() {
+  printf("testing load with data\n");
+
+  // we need some set of values
+  size_t size = 10000;
+  uint64_t *big_set = (uint64_t *)malloc(sizeof(uint64_t) * size);
+  for (size_t i = 0; i < size; i++) {
+    big_set[i] = i; // we use contiguous values
+  }
+
+  // construct and populate the filter
+  XorFilter<uint8_t> filter8_1(size);
+  if (!filter8_1.valid()) {
+    printf("failed to allocate filter\n");
+    return false;
+  }
+  filter8_1.populate(big_set, size);
+  // true positive tests
+  for (size_t i = 0; i < size; i++) {
+    if (!filter8_1.contain(big_set[i])) {
+      printf("bug!\n");
+      return false;
+    }
+  }
+
+  XorFilter<uint8_t> filter8_2(filter8_1.data(), filter8_1.sizeInBytes(), filter8_1.keyCount(), filter8_1.blockLength(), filter8_1.seed());
+  if (!filter8_2.valid()) {
+    printf("failed to load filter\n");
+    return false;
+  }
+  // true positive tests
+  for (size_t i = 0; i < size; i++) {
+    if (!filter8_2.contain(big_set[i])) {
+      printf("bug!\n");
+      return false;
+    }
+  }
+
+
+  // construct and populate the filter
+  XorFilter<uint16_t> filter16_1(size);
+  if (!filter16_1.valid()) {
+    printf("failed to allocate filter\n");
+    return false;
+  }
+  filter16_1.populate(big_set, size);
+  // true positive tests
+  for (size_t i = 0; i < size; i++) {
+    if (!filter16_1.contain(big_set[i])) {
+      printf("bug!\n");
+      return false;
+    }
+  }
+  // load the filter data into a new filter
+  XorFilter<uint16_t> filter16_2(filter16_1.data(), filter16_1.sizeInBytes(), filter16_1.keyCount(), filter16_1.blockLength(), filter16_1.seed());
+  if (!filter16_2.valid()) {
+    printf("failed to load filter\n");
+    return false;
+  }
+  // true positive tests
+  for (size_t i = 0; i < size; i++) {
+    if (!filter16_2.contain(big_set[i])) {
+      printf("bug!\n");
+      return false;
+    }
+  }
+
+
+  // construct and populate the filter
+  XorFilter<uint32_t> filter32_1(size);
+  if (!filter32_1.valid()) {
+    printf("failed to allocate filter\n");
+    return false;
+  }
+  filter32_1.populate(big_set, size);
+  // true positive tests
+  for (size_t i = 0; i < size; i++) {
+    if (!filter32_1.contain(big_set[i])) {
+      printf("bug!\n");
+      return false;
+    }
+  }
+  // load the filter data into a new filter
+  XorFilter<uint32_t> filter32_2(filter32_1.data(), filter32_1.sizeInBytes(), filter32_1.keyCount(), filter32_1.blockLength(), filter32_1.seed());
+  if (!filter32_2.valid()) {
+    printf("failed to load filter\n");
+    return false;
+  }
+  // true positive tests
+  for (size_t i = 0; i < size; i++) {
+    if (!filter32_2.contain(big_set[i])) {
+      printf("bug!\n");
+      return false;
+    }
+  }
+
+
+  printf("load data tests succeeded\n");
   return true;
 }
 
@@ -322,6 +423,8 @@ int main() {
   testxor8();
   testxor16();
   testxor32();
-
-  testbufferedxor32big();
+  testLoadWithData();
+  // Uncomment to run large test that should result in some
+  // false positives at 32 bits
+  //testbufferedxor32big();
 }

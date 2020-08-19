@@ -1268,35 +1268,71 @@ bool xor16_populate(const uint64_t *keys, uint32_t size, xor16_t *filter) {
 template <typename ItemType>
 class XorFilter {
 
+  uint64_t m_keyCount = 0;
   uint64_t m_seed = 0;
   uint64_t m_blockLength = 0;
-  ItemType *m_fingerprints = NULL; // after allocate, will point to 3*blockLength values
+  ItemType *m_fingerprints = NULL;
+  bool m_ownData = false;
 
 public:
-  XorFilter(const size_t size) {
-    size_t capacity = 32 + 1.23 * size;
+  // Constructor to create a new filter
+  XorFilter(uint64_t keyCount) : m_keyCount(keyCount) {
+    uint64_t capacity = 32 + 1.23 * keyCount;
     capacity = capacity / 3 * 3;
     m_blockLength = capacity / 3;
 
-    m_fingerprints = (ItemType *)malloc(capacity * sizeof(ItemType));
+    m_fingerprints = (ItemType *)calloc(capacity, sizeof(ItemType));
     if (m_fingerprints == NULL) {
       return;
     }
+    m_ownData = true;
+  }
+
+  // Constructor to load an existing filter
+  XorFilter(void *data, uint64_t len, uint64_t keyCount, uint64_t blockLength, uint64_t seed) {
+    uint64_t capacity = blockLength * 3;
+    if (len != capacity * sizeof(ItemType)) {
+      return;
+    }
+    m_fingerprints = (ItemType *)data;
+    if (m_fingerprints == NULL) {
+      return;
+    }
+    m_keyCount = keyCount;
+    m_blockLength = blockLength;
+    m_seed = seed;
+    m_ownData = false;
   }
 
   ~XorFilter() {
-    if (m_fingerprints) {
+    if (m_fingerprints && m_ownData) {
       free(m_fingerprints);
     }
   }
 
-  bool valid() {
+  inline bool valid() const {
     return m_fingerprints != NULL;
   }
 
+  inline uint64_t keyCount() const {
+    return m_keyCount;
+  }
+
+  inline uint64_t blockLength() const {
+    return m_blockLength;
+  }
+
+  inline uint64_t seed() const {
+    return m_seed;
+  }
+
+  inline void *data() const {
+    return (void *)m_fingerprints;
+  }
+
   // report memory usage
-  inline uint64_t size_in_bytes() {
-    return 3ULL * m_blockLength * sizeof(ItemType) + sizeof(*this);
+  inline uint64_t sizeInBytes() const {
+    return 3ULL * m_blockLength * sizeof(ItemType);
   }
 
   // Report if the key is in the set, with false positive rate.
@@ -1321,7 +1357,12 @@ public:
   // it should never fail, except if there are duplicated keys. If it fails,
   // a return value of false is provided.
   //
-  bool buffered_populate(const uint64_t *keys, uint32_t size) {
+  bool populateBuffered(const uint64_t *keys, uint32_t size) {
+    // If we don't own the data, we can't populate it
+    if (!m_ownData) {
+      return false;
+    }
+
     uint64_t rng_counter = 1;
     m_seed = xor_rng_splitmix64(&rng_counter);
     size_t arrayLength = m_blockLength * 3; // size of the backing array
@@ -1532,6 +1573,11 @@ public:
   // a return value of false is provided.
   //
   bool populate(const uint64_t *keys, uint32_t size) {
+    // If we don't own the data, we can't populate it
+    if (!m_ownData) {
+      return false;
+    }
+
     uint64_t rng_counter = 1;
     m_seed = xor_rng_splitmix64(&rng_counter);
     size_t arrayLength = m_blockLength * 3; // size of the backing array

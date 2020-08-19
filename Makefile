@@ -11,6 +11,7 @@ bench : benchmarks/bench.c include/xorfilter.h include/fusefilter.h
 
 test: unit
 	./unit
+	./unit2
 
 clean: 
-	rm -f unit bench
+	rm -f unit unit2 bench
