@@ -1,3 +1,27 @@
+## Netskope changes
+This project has been modified from the original to include an XorFilter template class. This class can be instantiated with the type of integer that corresponds to the size of the fingerprint desired. For example:
+
+```C++
+XorFilter<uint8_t> f8(1000); // Creates a filter for 1000 keys with an 8-bit fingerprint
+XorFilter<uint16_t> f16(1000); // Creates a filter for 1000 keys with a 16-bit fingerprint
+XorFilter<uint32_t> f32(1000); // Creates a filter for 1000 keys with a 32-bit fingerprint
+```
+
+There is also a pure virtual base class called BaseXorFilter. This class makes it easy to use an Xor filter when the size that was used to create it is not know. For example:
+
+```C++
+void getBitsPerKey(BaseXorFilter *f) {
+    std::cout << "Bits per key: " << f->bitsPerKey() << std::endl;
+}
+
+BaseXorFilter *f32 = new XorFilter<uint32_t>(1000);
+getBitsPerKey(f32)
+delete f32;
+```
+
+The class also supports persistence by exposing the filter settings so they can be saved. These saved settings can be passed into the class constructor when creating the filter.
+
+
 ## Header-only Xor Filter library
 [![Build Status](https://travis-ci.org/FastFilter/xor_singleheader.svg?branch=master)](https://travis-ci.org/FastFilter/xor_singleheader)
 
