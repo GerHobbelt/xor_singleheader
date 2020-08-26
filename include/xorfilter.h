@@ -1265,6 +1265,8 @@ static inline bool xor16_populate(const uint64_t *keys, uint32_t size, xor16_t *
 
 #ifdef __cplusplus
 
+#include <set>
+
 namespace xorfilter {
 
 class BaseXorFilter {
@@ -1295,8 +1297,10 @@ class BaseXorFilter {
     virtual bool contain(uint64_t key) const = 0;
 
     virtual bool populateBuffered(const uint64_t *keys, uint32_t size) = 0;
+    virtual bool populateBuffered(const std::set<uint64_t> &keys) = 0;
 
     virtual bool populate(const uint64_t *keys, uint32_t size) = 0;
+    virtual bool populate(const std::set<uint64_t> &keys) = 0;
 
   protected:
     uint32_t m_bitsPerKey = 0;
@@ -1616,6 +1620,221 @@ public:
   // it should never fail, except if there are duplicated keys. If it fails,
   // a return value of false is provided.
   //
+  bool populateBuffered(const std::set<uint64_t> &keys) {
+    // If we don't own the data, we can't populate it
+    if (!m_ownData) {
+      return false;
+    }
+
+    uint32_t size = keys.size();
+    uint64_t rng_counter = 1;
+    m_seed = xor_rng_splitmix64(&rng_counter);
+    size_t arrayLength = m_blockLength * 3; // size of the backing array
+    xor_setbuffer_t buffer0, buffer1, buffer2;
+    size_t blockLength = m_blockLength;
+    bool ok0 = xor_init_buffer(&buffer0, blockLength);
+    bool ok1 = xor_init_buffer(&buffer1, blockLength);
+    bool ok2 = xor_init_buffer(&buffer2, blockLength);
+    if (!ok0 || !ok1 || !ok2) {
+      xor_free_buffer(&buffer0);
+      xor_free_buffer(&buffer1);
+      xor_free_buffer(&buffer2);
+      return false;
+    }
+
+    xor_xorset_t *sets =
+        (xor_xorset_t *)malloc(arrayLength * sizeof(xor_xorset_t));
+
+    xor_keyindex_t *Q =
+        (xor_keyindex_t *)malloc(arrayLength * sizeof(xor_keyindex_t));
+
+    xor_keyindex_t *stack =
+        (xor_keyindex_t *)malloc(size * sizeof(xor_keyindex_t));
+
+    if ((sets == NULL) || (Q == NULL) || (stack == NULL)) {
+      xor_free_buffer(&buffer0);
+      xor_free_buffer(&buffer1);
+      xor_free_buffer(&buffer2);
+      free(sets);
+      free(Q);
+      free(stack);
+      return false;
+    }
+    xor_xorset_t *sets0 = sets;
+    xor_xorset_t *sets1 = sets + blockLength;
+    xor_xorset_t *sets2 = sets + 2 * blockLength;
+    xor_keyindex_t *Q0 = Q;
+    xor_keyindex_t *Q1 = Q + blockLength;
+    xor_keyindex_t *Q2 = Q + 2 * blockLength;
+
+    int iterations = 0;
+
+    while (true) {
+      iterations ++;
+      if(iterations > XOR_MAX_ITERATIONS) {
+        fprintf(stderr, "Too many iterations. Are all your keys unique?");
+        xor_free_buffer(&buffer0);
+        xor_free_buffer(&buffer1);
+        xor_free_buffer(&buffer2);
+        free(sets);
+        free(Q);
+        free(stack);
+        return false;
+      }
+      memset(sets, 0, sizeof(xor_xorset_t) * arrayLength);
+      for (auto &key : keys) {
+        xor_hashes_t hs = get_h0_h1_h2(key);
+        xor_buffered_increment_counter(hs.h0, hs.h, &buffer0, sets0);
+        xor_buffered_increment_counter(hs.h1, hs.h, &buffer1,
+                                      sets1);
+        xor_buffered_increment_counter(hs.h2, hs.h, &buffer2,
+                                      sets2);
+      }
+      xor_flush_increment_buffer(&buffer0, sets0);
+      xor_flush_increment_buffer(&buffer1, sets1);
+      xor_flush_increment_buffer(&buffer2, sets2);
+      // todo: the flush should be sync with the detection that follows
+      // scan for values with a count of one
+      size_t Q0size = 0, Q1size = 0, Q2size = 0;
+      for (size_t i = 0; i < m_blockLength; i++) {
+        if (sets0[i].count == 1) {
+          Q0[Q0size].index = i;
+          Q0[Q0size].hash = sets0[i].xormask;
+          Q0size++;
+        }
+      }
+
+      for (size_t i = 0; i < m_blockLength; i++) {
+        if (sets1[i].count == 1) {
+          Q1[Q1size].index = i;
+          Q1[Q1size].hash = sets1[i].xormask;
+          Q1size++;
+        }
+      }
+      for (size_t i = 0; i < m_blockLength; i++) {
+        if (sets2[i].count == 1) {
+          Q2[Q2size].index = i;
+          Q2[Q2size].hash = sets2[i].xormask;
+          Q2size++;
+        }
+      }
+
+      size_t stack_size = 0;
+      while (Q0size + Q1size + Q2size > 0) {
+        while (Q0size > 0) {
+          xor_keyindex_t keyindex = Q0[--Q0size];
+          size_t index = keyindex.index;
+          xor_make_buffer_current(&buffer0, sets0, index, Q0, &Q0size);
+
+          if (sets0[index].count == 0)
+            continue; // not actually possible after the initial scan.
+          //sets0[index].count = 0;
+          uint64_t hash = keyindex.hash;
+          uint32_t h1 = get_h1(hash);
+          uint32_t h2 = get_h2(hash);
+
+          stack[stack_size] = keyindex;
+          stack_size++;
+          xor_buffered_decrement_counter(h1, hash, &buffer1, sets1,
+                                        Q1, &Q1size);
+          xor_buffered_decrement_counter(h2, hash, &buffer2,
+                                        sets2, Q2, &Q2size);
+        }
+        if (Q1size == 0)
+          xor_flushone_decrement_buffer(&buffer1, sets1, Q1, &Q1size);
+
+        while (Q1size > 0) {
+          xor_keyindex_t keyindex = Q1[--Q1size];
+          size_t index = keyindex.index;
+          xor_make_buffer_current(&buffer1, sets1, index, Q1, &Q1size);
+
+          if (sets1[index].count == 0)
+            continue;
+          //sets1[index].count = 0;
+          uint64_t hash = keyindex.hash;
+          uint32_t h0 = get_h0(hash);
+          uint32_t h2 = get_h2(hash);
+          keyindex.index += blockLength;
+          stack[stack_size] = keyindex;
+          stack_size++;
+          xor_buffered_decrement_counter(h0, hash, &buffer0, sets0, Q0, &Q0size);
+          xor_buffered_decrement_counter(h2, hash, &buffer2,
+                                        sets2, Q2, &Q2size);
+        }
+        if (Q2size == 0)
+          xor_flushone_decrement_buffer(&buffer2, sets2, Q2, &Q2size);
+        while (Q2size > 0) {
+          xor_keyindex_t keyindex = Q2[--Q2size];
+          size_t index = keyindex.index;
+          xor_make_buffer_current(&buffer2, sets2, index, Q2, &Q2size);
+          if (sets2[index].count == 0)
+            continue;
+
+          //sets2[index].count = 0;
+          uint64_t hash = keyindex.hash;
+
+          uint32_t h0 = get_h0(hash);
+          uint32_t h1 = get_h1(hash);
+          keyindex.index += 2 * blockLength;
+
+          stack[stack_size] = keyindex;
+          stack_size++;
+          xor_buffered_decrement_counter(h0, hash, &buffer0, sets0, Q0, &Q0size);
+          xor_buffered_decrement_counter(h1, hash, &buffer1, sets1,
+                                        Q1, &Q1size);
+        }
+        if (Q0size == 0)
+          xor_flushone_decrement_buffer(&buffer0, sets0, Q0, &Q0size);
+        if ((Q0size + Q1size + Q2size == 0) && (stack_size < size)) {
+          // this should basically never happen
+          xor_flush_decrement_buffer(&buffer0, sets0, Q0, &Q0size);
+          xor_flush_decrement_buffer(&buffer1, sets1, Q1, &Q1size);
+          xor_flush_decrement_buffer(&buffer2, sets2, Q2, &Q2size);
+        }
+      }
+      if (stack_size == size) {
+        // success
+        break;
+      }
+
+      m_seed = xor_rng_splitmix64(&rng_counter);
+    }
+    ItemType * fingerprints0 = m_fingerprints;
+    ItemType * fingerprints1 = m_fingerprints + blockLength;
+    ItemType * fingerprints2 = m_fingerprints + 2 * blockLength;
+
+    size_t stack_size = size;
+    while (stack_size > 0) {
+      xor_keyindex_t ki = stack[--stack_size];
+      uint64_t val = xor_fingerprint(ki.hash);
+      if(ki.index < blockLength) {
+        val ^= fingerprints1[get_h1(ki.hash)] ^ fingerprints2[get_h2(ki.hash)];
+      } else if(ki.index < 2 * blockLength) {
+        val ^= fingerprints0[get_h0(ki.hash)] ^ fingerprints2[get_h2(ki.hash)];
+      } else {
+        val ^= fingerprints0[get_h0(ki.hash)] ^ fingerprints1[get_h1(ki.hash)];
+      }
+      m_fingerprints[ki.index] = val;
+    }
+    xor_free_buffer(&buffer0);
+    xor_free_buffer(&buffer1);
+    xor_free_buffer(&buffer2);
+
+    free(sets);
+    free(Q);
+    free(stack);
+    return true;
+  }
+
+  //
+  // construct the filter, returns true on success, false on failure.
+  // most likely, a failure is due to too high a memory usage
+  // size is the number of keys
+  // The caller is responsible to ensure that there are no duplicated keys.
+  // The inner loop will run up to XOR_MAX_ITERATIONS times (default on 100),
+  // it should never fail, except if there are duplicated keys. If it fails,
+  // a return value of false is provided.
+  //
   bool populate(const uint64_t *keys, uint32_t size) {
     // If we don't own the data, we can't populate it
     if (!m_ownData) {
@@ -1664,6 +1883,216 @@ public:
       memset(sets, 0, sizeof(xor_xorset_t) * arrayLength);
       for (size_t i = 0; i < size; i++) {
         uint64_t key = keys[i];
+        xor_hashes_t hs = get_h0_h1_h2(key);
+        sets0[hs.h0].xormask ^= hs.h;
+        sets0[hs.h0].count++;
+        sets1[hs.h1].xormask ^= hs.h;
+        sets1[hs.h1].count++;
+        sets2[hs.h2].xormask ^= hs.h;
+        sets2[hs.h2].count++;
+      }
+      // todo: the flush should be sync with the detection that follows
+      // scan for values with a count of one
+      size_t Q0size = 0, Q1size = 0, Q2size = 0;
+      for (size_t i = 0; i < m_blockLength; i++) {
+        if (sets0[i].count == 1) {
+          Q0[Q0size].index = i;
+          Q0[Q0size].hash = sets0[i].xormask;
+          Q0size++;
+        }
+      }
+
+      for (size_t i = 0; i < m_blockLength; i++) {
+        if (sets1[i].count == 1) {
+          Q1[Q1size].index = i;
+          Q1[Q1size].hash = sets1[i].xormask;
+          Q1size++;
+        }
+      }
+      for (size_t i = 0; i < m_blockLength; i++) {
+        if (sets2[i].count == 1) {
+          Q2[Q2size].index = i;
+          Q2[Q2size].hash = sets2[i].xormask;
+          Q2size++;
+        }
+      }
+
+      size_t stack_size = 0;
+      while (Q0size + Q1size + Q2size > 0) {
+        while (Q0size > 0) {
+          xor_keyindex_t keyindex = Q0[--Q0size];
+          size_t index = keyindex.index;
+          if (sets0[index].count == 0)
+            continue; // not actually possible after the initial scan.
+          //sets0[index].count = 0;
+          uint64_t hash = keyindex.hash;
+          uint32_t h1 = get_h1(hash);
+          uint32_t h2 = get_h2(hash);
+
+          stack[stack_size] = keyindex;
+          stack_size++;
+          sets1[h1].xormask ^= hash;
+          sets1[h1].count--;
+          if (sets1[h1].count == 1) {
+            Q1[Q1size].index = h1;
+            Q1[Q1size].hash = sets1[h1].xormask;
+            Q1size++;
+          }
+          sets2[h2].xormask ^= hash;
+          sets2[h2].count--;
+          if (sets2[h2].count == 1) {
+            Q2[Q2size].index = h2;
+            Q2[Q2size].hash = sets2[h2].xormask;
+            Q2size++;
+          }
+        }
+        while (Q1size > 0) {
+          xor_keyindex_t keyindex = Q1[--Q1size];
+          size_t index = keyindex.index;
+          if (sets1[index].count == 0)
+            continue;
+          //sets1[index].count = 0;
+          uint64_t hash = keyindex.hash;
+          uint32_t h0 = get_h0(hash);
+          uint32_t h2 = get_h2(hash);
+          keyindex.index += blockLength;
+          stack[stack_size] = keyindex;
+          stack_size++;
+          sets0[h0].xormask ^= hash;
+          sets0[h0].count--;
+          if (sets0[h0].count == 1) {
+            Q0[Q0size].index = h0;
+            Q0[Q0size].hash = sets0[h0].xormask;
+            Q0size++;
+          }
+          sets2[h2].xormask ^= hash;
+          sets2[h2].count--;
+          if (sets2[h2].count == 1) {
+            Q2[Q2size].index = h2;
+            Q2[Q2size].hash = sets2[h2].xormask;
+            Q2size++;
+          }
+        }
+        while (Q2size > 0) {
+          xor_keyindex_t keyindex = Q2[--Q2size];
+          size_t index = keyindex.index;
+          if (sets2[index].count == 0)
+            continue;
+
+          //sets2[index].count = 0;
+          uint64_t hash = keyindex.hash;
+
+          uint32_t h0 = get_h0(hash);
+          uint32_t h1 = get_h1(hash);
+          keyindex.index += 2 * blockLength;
+
+          stack[stack_size] = keyindex;
+          stack_size++;
+          sets0[h0].xormask ^= hash;
+          sets0[h0].count--;
+          if (sets0[h0].count == 1) {
+            Q0[Q0size].index = h0;
+            Q0[Q0size].hash = sets0[h0].xormask;
+            Q0size++;
+          }
+          sets1[h1].xormask ^= hash;
+          sets1[h1].count--;
+          if (sets1[h1].count == 1) {
+            Q1[Q1size].index = h1;
+            Q1[Q1size].hash = sets1[h1].xormask;
+            Q1size++;
+          }
+
+        }
+      }
+      if (stack_size == size) {
+        // success
+        break;
+      }
+
+      m_seed = xor_rng_splitmix64(&rng_counter);
+    }
+    ItemType * fingerprints0 = m_fingerprints;
+    ItemType * fingerprints1 = m_fingerprints + blockLength;
+    ItemType * fingerprints2 = m_fingerprints + 2 * blockLength;
+
+    size_t stack_size = size;
+    while (stack_size > 0) {
+      xor_keyindex_t ki = stack[--stack_size];
+      uint64_t val = xor_fingerprint(ki.hash);
+      if(ki.index < blockLength) {
+        val ^= fingerprints1[get_h1(ki.hash)] ^ fingerprints2[get_h2(ki.hash)];
+      } else if(ki.index < 2 * blockLength) {
+        val ^= fingerprints0[get_h0(ki.hash)] ^ fingerprints2[get_h2(ki.hash)];
+      } else {
+        val ^= fingerprints0[get_h0(ki.hash)] ^ fingerprints1[get_h1(ki.hash)];
+      }
+      m_fingerprints[ki.index] = val;
+    }
+
+    free(sets);
+    free(Q);
+    free(stack);
+    return true;
+  }
+
+  //
+  // construct the filter, returns true on success, false on failure.
+  // most likely, a failure is due to too high a memory usage
+  // size is the number of keys
+  // The caller is responsible to ensure that there are no duplicated keys.
+  // The inner loop will run up to XOR_MAX_ITERATIONS times (default on 100),
+  // it should never fail, except if there are duplicated keys. If it fails,
+  // a return value of false is provided.
+  //
+  bool populate(const std::set<uint64_t> &keys) {
+    // If we don't own the data, we can't populate it
+    if (!m_ownData) {
+      return false;
+    }
+
+    uint32_t size = keys.size();
+    uint64_t rng_counter = 1;
+    m_seed = xor_rng_splitmix64(&rng_counter);
+    size_t arrayLength = m_blockLength * 3; // size of the backing array
+    size_t blockLength = m_blockLength;
+
+    xor_xorset_t *sets =
+        (xor_xorset_t *)malloc(arrayLength * sizeof(xor_xorset_t));
+
+    xor_keyindex_t *Q =
+        (xor_keyindex_t *)malloc(arrayLength * sizeof(xor_keyindex_t));
+
+    xor_keyindex_t *stack =
+        (xor_keyindex_t *)malloc(size * sizeof(xor_keyindex_t));
+
+    if ((sets == NULL) || (Q == NULL) || (stack == NULL)) {
+      free(sets);
+      free(Q);
+      free(stack);
+      return false;
+    }
+    xor_xorset_t *sets0 = sets;
+    xor_xorset_t *sets1 = sets + blockLength;
+    xor_xorset_t *sets2 = sets + 2 * blockLength;
+    xor_keyindex_t *Q0 = Q;
+    xor_keyindex_t *Q1 = Q + blockLength;
+    xor_keyindex_t *Q2 = Q + 2 * blockLength;
+
+    int iterations = 0;
+
+    while (true) {
+      iterations ++;
+      if(iterations > XOR_MAX_ITERATIONS) {
+        fprintf(stderr, "Too many iterations. Are all your keys unique?");
+        free(sets);
+        free(Q);
+        free(stack);
+        return false;
+      }
+
+      memset(sets, 0, sizeof(xor_xorset_t) * arrayLength);
+      for (auto &key : keys) {
         xor_hashes_t hs = get_h0_h1_h2(key);
         sets0[hs.h0].xormask ^= hs.h;
         sets0[hs.h0].count++;

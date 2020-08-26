@@ -23,6 +23,24 @@ bool testPopulate(BaseXorFilter &filter, uint64_t *big_set, uint64_t size) {
   return true;
 }
 
+bool testPopulate(BaseXorFilter &filter, std::set<uint64_t> &big_set) {
+  // Populate the filter
+  if (!filter.populate(big_set)) {
+    printf("populate failed\n");
+    return false;
+  }
+
+  // Test for true positives
+  for (auto &key : big_set) {
+    if (!filter.contain(key)) {
+      printf("expected value not found\n");
+      return false;
+    }
+  }
+
+  return true;
+}
+
 bool testPopulateBuffered(BaseXorFilter &filter, uint64_t *big_set, uint64_t size) {
   // Populate the filter
   if (!filter.populateBuffered(big_set, size)) {
@@ -33,6 +51,24 @@ bool testPopulateBuffered(BaseXorFilter &filter, uint64_t *big_set, uint64_t siz
   // Test for true positives
   for (uint64_t i = 0; i < size; i++) {
     if (!filter.contain(big_set[i])) {
+      printf("expected value not found\n");
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool testPopulateBuffered(BaseXorFilter &filter, std::set<uint64_t> &big_set) {
+  // Populate the filter
+  if (!filter.populateBuffered(big_set)) {
+    printf("populate failed\n");
+    return false;
+  }
+
+  // Test for true positives
+  for (auto &key : big_set) {
+    if (!filter.contain(key)) {
       printf("expected value not found\n");
       return false;
     }
@@ -71,18 +107,21 @@ uint64_t *createBigSet(uint64_t size) {
   return big_set;
 }
 
-bool testxor8() {
+bool createBigSet(uint64_t size, std::set<uint64_t> &big_set) {
+  // Fill in the set
+  big_set.clear();
+  for (uint64_t i = 0; i < size; i++) {
+    big_set.insert(i); // we use contiguous values
+  }
+
+  return big_set.size() == size;
+}
+
+bool testxor8(bool use_array = true) {
   printf("\ntesting xor8\n");
 
   uint64_t size = 10000;
 
-  // we need some set of values
-  uint64_t *big_set = createBigSet(size);
-  if (!big_set) {
-    printf("failed to create big set\n");
-    return false;
-  }
-
   // create the filter
   XorFilter<uint8_t> filter(size);
   if (!filter.valid()) {
@@ -91,8 +130,28 @@ bool testxor8() {
   }
 
   // test populate
-  if (!testPopulate(filter, big_set, size)) {
-    return false;
+  if (use_array) {
+    // we need some set of values
+    uint64_t *big_set = createBigSet(size);
+    if (!big_set) {
+      printf("failed to create big set\n");
+      return false;
+    }
+    if (!testPopulate(filter, big_set, size)) {
+      free(big_set);
+      return false;
+    }
+    free(big_set);
+  } else {
+    // we need some set of values
+    std::set<uint64_t> big_set;
+    if (!createBigSet(size, big_set)) {
+      printf("failed to create big set\n");
+      return false;
+    }
+    if (!testPopulate(filter, big_set)) {
+      return false;
+    }
   }
 
   // test contain
@@ -103,31 +162,44 @@ bool testxor8() {
   }
 
   printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
-  free(big_set);
   return true;
 }
 
-bool testbufferedxor8() {
+bool testbufferedxor8(bool use_array = true) {
   printf("\ntesting buffered xor8\n");
 
   uint64_t size = 10000;
 
-  // we need some set of values
-  uint64_t *big_set = createBigSet(size);
-  if (!big_set) {
-    printf("failed to create big set\n");
-    return false;
-  }
-
+  // create the filter
   XorFilter<uint8_t> filter(size);
   if (!filter.valid()) {
     printf("failed to allocate filter\n");
     return false;
   }
 
-  // test populate buffered
-  if (!testPopulateBuffered(filter, big_set, size)) {
-    return false;
+  // test populate
+  if (use_array) {
+    // we need some set of values
+    uint64_t *big_set = createBigSet(size);
+    if (!big_set) {
+      printf("failed to create big set\n");
+      return false;
+    }
+    if (!testPopulateBuffered(filter, big_set, size)) {
+      free(big_set);
+      return false;
+    }
+    free(big_set);
+  } else {
+    // we need some set of values
+    std::set<uint64_t> big_set;
+    if (!createBigSet(size, big_set)) {
+      printf("failed to create big set\n");
+      return false;
+    }
+    if (!testPopulateBuffered(filter, big_set)) {
+      return false;
+    }
   }
 
   // test contain
@@ -138,22 +210,14 @@ bool testbufferedxor8() {
   }
 
   printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
-  free(big_set);
   return true;
 }
 
-bool testxor16() {
+bool testxor16(bool use_array = true) {
   printf("\ntesting xor16\n");
 
   uint64_t size = 10000;
 
-  // we need some set of values
-  uint64_t *big_set = createBigSet(size);
-  if (!big_set) {
-    printf("failed to create big set\n");
-    return false;
-  }
-
   // create the filter
   XorFilter<uint16_t> filter(size);
   if (!filter.valid()) {
@@ -162,8 +226,28 @@ bool testxor16() {
   }
 
   // test populate
-  if (!testPopulate(filter, big_set, size)) {
-    return false;
+  if (use_array) {
+    // we need some set of values
+    uint64_t *big_set = createBigSet(size);
+    if (!big_set) {
+      printf("failed to create big set\n");
+      return false;
+    }
+    if (!testPopulate(filter, big_set, size)) {
+      free(big_set);
+      return false;
+    }
+    free(big_set);
+  } else {
+    // we need some set of values
+    std::set<uint64_t> big_set;
+    if (!createBigSet(size, big_set)) {
+      printf("failed to create big set\n");
+      return false;
+    }
+    if (!testPopulate(filter, big_set)) {
+      return false;
+    }
   }
 
   // test contain
@@ -174,23 +258,15 @@ bool testxor16() {
   }
 
   printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
-  free(big_set);
   return true;
 }
 
 
-bool testbufferedxor16() {
+bool testbufferedxor16(bool use_array = true) {
   printf("\ntesting buffered xor16\n");
 
   uint64_t size = 10000;
 
-  // we need some set of values
-  uint64_t *big_set = createBigSet(size);
-  if (!big_set) {
-    printf("failed to create big set\n");
-    return false;
-  }
-
   // create the filter
   XorFilter<uint16_t> filter(size);
   if (!filter.valid()) {
@@ -199,8 +275,28 @@ bool testbufferedxor16() {
   }
 
   // test populate
-  if (!testPopulateBuffered(filter, big_set, size)) {
-    return false;
+  if (use_array) {
+    // we need some set of values
+    uint64_t *big_set = createBigSet(size);
+    if (!big_set) {
+      printf("failed to create big set\n");
+      return false;
+    }
+    if (!testPopulateBuffered(filter, big_set, size)) {
+      free(big_set);
+      return false;
+    }
+    free(big_set);
+  } else {
+    // we need some set of values
+    std::set<uint64_t> big_set;
+    if (!createBigSet(size, big_set)) {
+      printf("failed to create big set\n");
+      return false;
+    }
+    if (!testPopulateBuffered(filter, big_set)) {
+      return false;
+    }
   }
 
   // test contain
@@ -211,22 +307,14 @@ bool testbufferedxor16() {
   }
 
   printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
-  free(big_set);
   return true;
 }
 
-bool testxor32() {
+bool testxor32(bool use_array = true) {
   printf("\ntesting xor32\n");
 
   uint64_t size = 10000;
 
-  // we need some set of values
-  uint64_t *big_set = createBigSet(size);
-  if (!big_set) {
-    printf("failed to create big set\n");
-    return false;
-  }
-
   // create the filter
   XorFilter<uint32_t> filter(size);
   if (!filter.valid()) {
@@ -235,8 +323,28 @@ bool testxor32() {
   }
 
   // test populate
-  if (!testPopulate(filter, big_set, size)) {
-    return false;
+  if (use_array) {
+    // we need some set of values
+    uint64_t *big_set = createBigSet(size);
+    if (!big_set) {
+      printf("failed to create big set\n");
+      return false;
+    }
+    if (!testPopulate(filter, big_set, size)) {
+      free(big_set);
+      return false;
+    }
+    free(big_set);
+  } else {
+    // we need some set of values
+    std::set<uint64_t> big_set;
+    if (!createBigSet(size, big_set)) {
+      printf("failed to create big set\n");
+      return false;
+    }
+    if (!testPopulate(filter, big_set)) {
+      return false;
+    }
   }
 
   // test contain
@@ -247,22 +355,14 @@ bool testxor32() {
   }
 
   printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
-  free(big_set);
   return true;
 }
 
-bool testbufferedxor32() {
+bool testbufferedxor32(bool use_array = true) {
   printf("\ntesting buffered xor32\n");
 
   uint64_t size = 10000;
 
-  // we need some set of values
-  uint64_t *big_set = createBigSet(size);
-  if (!big_set) {
-    printf("failed to create big set\n");
-    return false;
-  }
-
   // create the filter
   XorFilter<uint32_t> filter(size);
   if (!filter.valid()) {
@@ -271,8 +371,28 @@ bool testbufferedxor32() {
   }
 
   // test populate
-  if (!testPopulateBuffered(filter, big_set, size)) {
-    return false;
+  if (use_array) {
+    // we need some set of values
+    uint64_t *big_set = createBigSet(size);
+    if (!big_set) {
+      printf("failed to create big set\n");
+      return false;
+    }
+    if (!testPopulateBuffered(filter, big_set, size)) {
+      free(big_set);
+      return false;
+    }
+    free(big_set);
+  } else {
+    // we need some set of values
+    std::set<uint64_t> big_set;
+    if (!createBigSet(size, big_set)) {
+      printf("failed to create big set\n");
+      return false;
+    }
+    if (!testPopulateBuffered(filter, big_set)) {
+      return false;
+    }
   }
 
   // test contain
@@ -283,21 +403,13 @@ bool testbufferedxor32() {
   }
 
   printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
-  free(big_set);
   return true;
 }
 
-bool testbufferedxor32big() {
+bool testbufferedxor32big(bool use_array = true) {
   printf("\ntesting buffered xor32 (big - this will take a long time)\n");
 
   uint64_t size = 100000000;
-
-  // we need some set of values
-  uint64_t *big_set = createBigSet(size);
-  if (!big_set) {
-    printf("failed to create big set\n");
-    return false;
-  }
 
   // create the filter
   XorFilter<uint32_t> filter(size);
@@ -307,8 +419,28 @@ bool testbufferedxor32big() {
   }
 
   // test populate
-  if (!testPopulateBuffered(filter, big_set, size)) {
-    return false;
+  if (use_array) {
+    // we need some set of values
+    uint64_t *big_set = createBigSet(size);
+    if (!big_set) {
+      printf("failed to create big set\n");
+      return false;
+    }
+    if (!testPopulateBuffered(filter, big_set, size)) {
+      free(big_set);
+      return false;
+    }
+    free(big_set);
+  } else {
+    // we need some set of values
+    std::set<uint64_t> big_set;
+    if (!createBigSet(size, big_set)) {
+      printf("failed to create big set\n");
+      return false;
+    }
+    if (!testPopulateBuffered(filter, big_set)) {
+      return false;
+    }
   }
 
   // test contain
@@ -319,7 +451,6 @@ bool testbufferedxor32big() {
   }
 
   printf("bits per entry %3.1f\n", filter.sizeInBytes() * 8.0 / size);
-  free(big_set);
   return true;
 }
 
@@ -467,15 +598,18 @@ bool testfuse8() {
 }
 
 int main() {
+  // Set to true to test with uint64_t *arrays,
+  // and false to test with std::set<uint64_t>
+  bool use_array = false;
   testfuse8();
-  testbufferedxor8();
-  testbufferedxor16();
-  testbufferedxor32();
-  testxor8();
-  testxor16();
-  testxor32();
+  testbufferedxor8(use_array);
+  testbufferedxor16(use_array);
+  testbufferedxor32(use_array);
+  testxor8(use_array);
+  testxor16(use_array);
+  testxor32(use_array);
   testLoadWithData();
   // Uncomment to run large test that should result in some
   // false positives at 32 bits
-  //testbufferedxor32big();
+  //testbufferedxor32big(use_array);
 }
