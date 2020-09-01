@@ -162,7 +162,7 @@ static inline void xor16_free(xor16_t *filter) {
 struct xor_xorset_s {
   uint64_t xormask;
   uint32_t count;
-};
+} __attribute__((packed, aligned(4)));
 
 typedef struct xor_xorset_s xor_xorset_t;
 
@@ -239,7 +239,7 @@ static inline xor_hashes_t xor16_get_h0_h1_h2(uint64_t k,
 struct xor_keyindex_s {
   uint64_t hash;
   uint32_t index;
-};
+} __attribute__((packed, aligned(4)));
 
 typedef struct xor_keyindex_s xor_keyindex_t;
 
@@ -1265,7 +1265,7 @@ static inline bool xor16_populate(const uint64_t *keys, uint32_t size, xor16_t *
 
 #ifdef __cplusplus
 
-#include <set>
+#include <vector>
 
 namespace xorfilter {
 
@@ -1297,10 +1297,10 @@ class BaseXorFilter {
     virtual bool contain(uint64_t key) const = 0;
 
     virtual bool populateBuffered(const uint64_t *keys, uint32_t size) = 0;
-    virtual bool populateBuffered(const std::set<uint64_t> &keys) = 0;
+    virtual bool populateBuffered(const std::vector<uint64_t> &keys) = 0;
 
     virtual bool populate(const uint64_t *keys, uint32_t size) = 0;
-    virtual bool populate(const std::set<uint64_t> &keys) = 0;
+    virtual bool populate(const std::vector<uint64_t> &keys) = 0;
 
   protected:
     uint32_t m_bitsPerKey = 0;
@@ -1620,7 +1620,7 @@ public:
   // it should never fail, except if there are duplicated keys. If it fails,
   // a return value of false is provided.
   //
-  bool populateBuffered(const std::set<uint64_t> &keys) {
+  bool populateBuffered(const std::vector<uint64_t> &keys) {
     // If we don't own the data, we can't populate it
     if (!m_ownData) {
       return false;
@@ -2045,7 +2045,7 @@ public:
   // it should never fail, except if there are duplicated keys. If it fails,
   // a return value of false is provided.
   //
-  bool populate(const std::set<uint64_t> &keys) {
+  bool populate(const std::vector<uint64_t> &keys) {
     // If we don't own the data, we can't populate it
     if (!m_ownData) {
       return false;
@@ -2056,13 +2056,10 @@ public:
     m_seed = xor_rng_splitmix64(&rng_counter);
     size_t arrayLength = m_blockLength * 3; // size of the backing array
     size_t blockLength = m_blockLength;
-
     xor_xorset_t *sets =
         (xor_xorset_t *)malloc(arrayLength * sizeof(xor_xorset_t));
-
     xor_keyindex_t *Q =
         (xor_keyindex_t *)malloc(arrayLength * sizeof(xor_keyindex_t));
-
     xor_keyindex_t *stack =
         (xor_keyindex_t *)malloc(size * sizeof(xor_keyindex_t));
 
