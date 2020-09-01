@@ -23,7 +23,7 @@ bool testPopulate(BaseXorFilter &filter, uint64_t *big_set, uint64_t size) {
   return true;
 }
 
-bool testPopulate(BaseXorFilter &filter, std::set<uint64_t> &big_set) {
+bool testPopulate(BaseXorFilter &filter, std::vector<uint64_t> &big_set) {
   // Populate the filter
   if (!filter.populate(big_set)) {
     printf("populate failed\n");
@@ -59,7 +59,7 @@ bool testPopulateBuffered(BaseXorFilter &filter, uint64_t *big_set, uint64_t siz
   return true;
 }
 
-bool testPopulateBuffered(BaseXorFilter &filter, std::set<uint64_t> &big_set) {
+bool testPopulateBuffered(BaseXorFilter &filter, std::vector<uint64_t> &big_set) {
   // Populate the filter
   if (!filter.populateBuffered(big_set)) {
     printf("populate failed\n");
@@ -107,11 +107,11 @@ uint64_t *createBigSet(uint64_t size) {
   return big_set;
 }
 
-bool createBigSet(uint64_t size, std::set<uint64_t> &big_set) {
+bool createBigSet(uint64_t size, std::vector<uint64_t> &big_set) {
   // Fill in the set
   big_set.clear();
   for (uint64_t i = 0; i < size; i++) {
-    big_set.insert(i); // we use contiguous values
+    big_set.push_back(i); // we use contiguous values
   }
 
   return big_set.size() == size;
@@ -144,7 +144,7 @@ bool testxor8(bool use_array = true) {
     free(big_set);
   } else {
     // we need some set of values
-    std::set<uint64_t> big_set;
+    std::vector<uint64_t> big_set;
     if (!createBigSet(size, big_set)) {
       printf("failed to create big set\n");
       return false;
@@ -192,7 +192,7 @@ bool testbufferedxor8(bool use_array = true) {
     free(big_set);
   } else {
     // we need some set of values
-    std::set<uint64_t> big_set;
+    std::vector<uint64_t> big_set;
     if (!createBigSet(size, big_set)) {
       printf("failed to create big set\n");
       return false;
@@ -240,7 +240,7 @@ bool testxor16(bool use_array = true) {
     free(big_set);
   } else {
     // we need some set of values
-    std::set<uint64_t> big_set;
+    std::vector<uint64_t> big_set;
     if (!createBigSet(size, big_set)) {
       printf("failed to create big set\n");
       return false;
@@ -289,7 +289,7 @@ bool testbufferedxor16(bool use_array = true) {
     free(big_set);
   } else {
     // we need some set of values
-    std::set<uint64_t> big_set;
+    std::vector<uint64_t> big_set;
     if (!createBigSet(size, big_set)) {
       printf("failed to create big set\n");
       return false;
@@ -337,7 +337,7 @@ bool testxor32(bool use_array = true) {
     free(big_set);
   } else {
     // we need some set of values
-    std::set<uint64_t> big_set;
+    std::vector<uint64_t> big_set;
     if (!createBigSet(size, big_set)) {
       printf("failed to create big set\n");
       return false;
@@ -385,7 +385,7 @@ bool testbufferedxor32(bool use_array = true) {
     free(big_set);
   } else {
     // we need some set of values
-    std::set<uint64_t> big_set;
+    std::vector<uint64_t> big_set;
     if (!createBigSet(size, big_set)) {
       printf("failed to create big set\n");
       return false;
@@ -433,7 +433,7 @@ bool testbufferedxor32big(bool use_array = true) {
     free(big_set);
   } else {
     // we need some set of values
-    std::set<uint64_t> big_set;
+    std::vector<uint64_t> big_set;
     if (!createBigSet(size, big_set)) {
       printf("failed to create big set\n");
       return false;
@@ -599,7 +599,7 @@ bool testfuse8() {
 
 int main() {
   // Set to true to test with uint64_t *arrays,
-  // and false to test with std::set<uint64_t>
+  // and false to test with std::vector<uint64_t>
   bool use_array = false;
   testfuse8();
   testbufferedxor8(use_array);
