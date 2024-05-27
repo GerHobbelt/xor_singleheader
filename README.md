@@ -55,12 +55,27 @@ about 0.0015%. The type is `binary_fuse16_t` and you may use it with
 functions such as `binary_fuse16_allocate`, `binary_fuse16_populate`,
 `binary_fuse8_contain` and `binary_fuse8_free`.
 
+You may serialize the data as follows:
+
+```C
+  size_t buffer_size = binary_fuse16_serialization_bytes(&filter);
+  char *buffer = (char*)malloc(buffer_size);
+  binary_fuse16_serialize(&filter, buffer);
+  binary_fuse16_free(&filter);
+  binary_fuse16_deserialize(&filter, buffer);
+  free(buffer);
+```
+
+The serialization does not handle endianess: it is expected that you will serialize
+and deserialize on the little endian systems. (Big endian systems are vanishingly rare.)
+
+
 ## C++ wrapper
 
 If you want a C++ version, you can roll your own:
 
 ```C++
-#include "xorfilter.h"
+#include "binaryfusefilter.h"
 
 class BinaryFuse {
 public:
@@ -73,8 +88,8 @@ public:
         binary_fuse8_free(&filter);
     }
 
-    bool AddAll(const uint64_t* data, const size_t start, const size_t end) {
-        return xor8_buffered_populate(data + start, end - start, &filter);
+    bool AddAll(uint64_t* data, const size_t start, const size_t end) {
+        return binary_fuse8_populate(data + start, end - start, &filter);
     }
     inline bool Contain(uint64_t &item) const {
         return binary_fuse8_contain(item, &filter);
@@ -83,7 +98,7 @@ public:
         return binary_fuse8_size_in_bytes(&filter);
     }
     BinaryFuse(BinaryFuse && o) : filter(o.filter)  {
-        o.filter.fingerprints = nullptr; // we take ownership for the data
+        o.filter.Fingerprints = nullptr; // we take ownership for the data
     }
     binary_fuse8_t filter;
 
@@ -156,3 +171,4 @@ It took 0.358220 seconds to build an index over 10000000 values.
 * [Python](https://github.com/GreyDireWolf/pyxorfilter)
 * [C99](https://github.com/skeeto/xf8)
 * [Julia](https://github.com/JokingHero/FastFilter.jl)
+* [C#](https://github.com/jonmat/FastIndex)
