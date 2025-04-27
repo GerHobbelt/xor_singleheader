@@ -304,7 +304,7 @@ bool testbinaryfuse16pack(size_t size, size_t repeated_size) {
               binary_fuse16_contain_gen);
 }
 
-void failure_rate_binary_fuse16() {
+void failure_rate_binary_fuse16(void) {
   printf("testing binary fuse16 for failure rate\n");
   // we construct many 5000-long input cases and check the probability of failure.
   size_t size = 5000;
@@ -328,7 +328,7 @@ void failure_rate_binary_fuse16() {
 }
 
 // test code from the example in the README
-void readme_pack() {
+void readme_pack(void) {
   binary_fuse16_t filter = {0};
   if (! binary_fuse16_allocate(64, &filter)) {
     printf("allocation failed\n");
@@ -353,7 +353,7 @@ void readme_pack() {
   binary_fuse16_free(&filter);
 }
 
-int main() {
+int main(void) {
   readme_pack();
   failure_rate_binary_fuse16();
   for(size_t size = 1000; size <= 1000000; size *= 300) {

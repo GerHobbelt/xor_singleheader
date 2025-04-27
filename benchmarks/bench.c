@@ -174,7 +174,7 @@ bool testbinaryfuse16(size_t size) {
   return true;
 }
 
-int main() {
+int main(void) {
   for (size_t s = 10000000; s <= 10000000; s *= 10) {
     if (!testbinaryfuse8(s)) { abort(); }
     if (!testbufferedxor8(s)) { abort(); }

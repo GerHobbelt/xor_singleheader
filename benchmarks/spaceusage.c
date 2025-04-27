@@ -101,7 +101,7 @@ sizes xor8(size_t n) {
   return s;
 }
 
-int main() {
+int main(void) {
     for (size_t n = 10; n <= 10000000; n *= 2) {
         printf("%-10zu ", n);  // Align number to 10 characters wide
         sizes f16 = fuse16(n);

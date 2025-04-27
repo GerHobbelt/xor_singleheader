@@ -2,6 +2,6 @@
 #include "xorfilter.h"
 #include <stdlib.h>
 
-int main() {
+int main(void) {
     return EXIT_SUCCESS;
 }
